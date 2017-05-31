@@ -28,9 +28,11 @@ Usage
 That executable, caliper_instrumenter, can be run against a file to instrument all functions in it with Caliper. Work is being done to make this accept TAU or Score-P selective instrumentation files. There is also a file, caliper_instrumenter.cmake, which allows for use in cmake build systems like so
 
 include(caliper-instrumenter.cmake)
+
+```
 add_[executable|library](mytarget <my source files>)
 instrument_target(mytarget)
-
+```
 
 Attribution
 -----------------------
