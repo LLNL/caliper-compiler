@@ -15,7 +15,9 @@ Building
 
 See the included Makefile for fuller docs, but for many
 
+```
 make LLVM_SRC_DIR=<your clang root dir>
+```
 
 Will work if the Clang plugin system is installed. This will create an executable
 in <your clone directory>/build called caliper_instrumenter
