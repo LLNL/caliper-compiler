@@ -33,4 +33,9 @@ instrument_target(mytarget)
 Attribution
 -----------------------
 
+Authors
+
+David Poliakoff
+David Boehme
+
 This work was inspired by Eli Bendersky's repo (https://github.com/eliben/llvm-clang-samples) showing how to write basic Clang plugins and build them, I highly recommend that if you're interested in developing these kinds of tools
