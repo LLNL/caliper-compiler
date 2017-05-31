@@ -1,0 +1,109 @@
+#!/bin/env python
+
+import curses
+import math
+import sys
+import StringIO
+import sh
+
+loc_file = sys.argv[1]
+locations = ""
+
+df = open("debug","w")
+
+
+rawdirlist = sh.find([".","-maxdepth","20","-name","*"])
+dirlist = [str(line.strip("\n")[2:]) for line in rawdirlist]
+dirlist = [line for line in dirlist if len(line)>4]
+
+df.write(str(rawdirlist))
+df.write("\n")
+df.write(str(dirlist))
+df.write("\n")
+
+stupid_global_state = {
+           "file_mode" : False
+        }
+
+with open(loc_file) as my_file:
+    locations = my_file.readlines()
+
+def pinch(val, lb, ub):
+    return min(max(val,lb),ub)
+
+def move_cursor(window, y, x):
+    oy,ox = window.getyx()
+    windowy,windowx = window.getmaxyx()
+    window.move(pinch(oy+y,0,windowy),pinch(ox+x,0,windowx))
+
+def window_display_text(window, text, lines = None):
+    window.clear()
+    y,x = window.getmaxyx()
+    windowy = y/2
+    windowx = x
+    nlines = int(math.ceil(float(text.count("\n"))/2.0))
+    windowy = max(0,windowy - nlines)
+    window.addstr(windowy,0,text)
+    midwind = windowy + (lines if lines else (nlines-1))
+    text = window.instr(midwind,0)
+    window.addstr(midwind, 0, text, curses.color_pair(1))
+    window.move(midwind,0)
+
+def show_file(window):
+    line,_ = window.getyx()
+    text = window.instr(line,0)
+    filename = text[:text.find(":")]
+    midcol = len(text) - 1 - text[::-1].find(":")
+    df.write("Matching " +str(filename)+"\n")
+    matches = [name for name in dirlist if name in filename]
+    linebuf = StringIO.StringIO()
+    #sys.exit(0)
+    linehandle = sh.wc("-l",matches[0],_out = linebuf)
+    linehandle.wait()
+    linecount = linebuf.getvalue()
+    linecount = linecount[linecount.find(" ")]
+    startnum = int(text[text.find(":")+1:midcol])
+    endnum = startnum
+    startline = str(max(1,startnum-5))
+    endline = str(min(endnum+5,linecount))
+    df.write(str(endnum)+","+startline+","+endline+"!!!\n")
+    
+    filetext = StringIO.StringIO()
+    gth = sh.sed("-n", "" + startline+","+endline+"p", matches[0], _out=filetext)
+    gth.wait()
+    
+    window_display_text(window,str(filetext.getvalue()),startnum-int(startline))
+    stupid_global_state["file_mode"] = True
+
+def display_file_list(window):  
+    window_display_text(window,"".join(locations))
+def exit_current_window(window):
+    if not stupid_global_state["file_mode"]:
+        sys.exit(0)
+    display_file_list(window)
+    stupid_global_state["file_mode"] = False
+
+
+def handle_key(window,key):
+  {
+    27               : lambda : exit_current_window(window),
+    ord('q')         : lambda : exit_current_window(window),
+    curses.KEY_UP    : lambda : move_cursor(window,-1,0),     
+    curses.KEY_LEFT  : lambda : move_cursor(window,0,-1), 
+    curses.KEY_RIGHT : lambda : move_cursor(window,0,1) ,
+    curses.KEY_DOWN  : lambda : move_cursor(window,1,0) , 
+    ord('e')         : lambda : show_file(window)
+  }.get(key, lambda  : 0 )()
+
+
+def passer(stdscr):
+    display_file_list(stdscr)
+    curses.init_pair(1,curses.COLOR_GREEN,curses.COLOR_BLACK,)
+    while(1):
+        key = stdscr.getch()
+        handle_key(stdscr,key)
+        stdscr.refresh()
+
+curses.wrapper(passer)
+df.write("\n")
+close(df)

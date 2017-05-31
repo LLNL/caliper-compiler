@@ -1,0 +1,19 @@
+.
+./test.cpp
+./compiler_conversator
+./files.csv
+./grep
+./get_loops
+./.get_loops.swp
+./debug
+./.compiler_conversator.swp
+
+['test.cpp', 'compiler_conversator', 'files.csv', 'get_loops', '.get_loops.swp', 'debug', '.compiler_conversator.swp']
+Matching /g/g0/dzpolia/hackathon/clone/caliper-compiler/loop-instrumenter/test.cpp
+5,1,10!!!
+Matching /g/g0/dzpolia/hackathon/clone/caliper-compiler/loop-instrumenter/test.cpp
+6,1,11!!!
+Matching /g/g0/dzpolia/hackathon/clone/caliper-compiler/loop-instrumenter/test.cpp
+3,1,8!!!
+Matching /g/g0/dzpolia/hackathon/clone/caliper-compiler/loop-instrumenter/test.cpp
+6,1,11!!!

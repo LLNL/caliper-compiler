@@ -1,0 +1,1 @@
+clang-query test.cpp -c="match forStmt()" --extra-arg="-fno-color-diagnostics" | grep "note" | sed "s,: note.*,,"
