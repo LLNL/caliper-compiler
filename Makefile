@@ -67,7 +67,7 @@ LLVM_SRC_PATH := $(shell echo $(CLANG_LOC_GUESS) | rev | sed "s,.*/nib/,/," | re
 # reflects a release build with CMake and Ninja. binary build of LLVM, point it
 # to the bin/ directory.
 LLVM_BUILD_PATH := $(LLVM_SRC_PATH)
-LLVM_BIN_PATH 	:= $(LLVM_BUILD_PATH)/bin/
+LLVM_BIN_PATH 	:= $(LLVM_BUILD_PATH)/rawbin/
 
 $(info -----------------------------------------------)
 $(info Using LLVM_SRC_PATH = $(LLVM_SRC_PATH))
@@ -140,10 +140,13 @@ SRC_CLANG_DIR := src_clang
 BUILDDIR := build
 
 .PHONY: all
-default: cali
+default: cali testprog
 
 cali: make_builddir \
 	$(BUILDDIR)/caliper_instrumenter
+
+testprog: test.cpp
+	$(CXX) $(CXXFLAGS) test.cpp -o test_prog
 
 .PHONY: emit_build_config
 emit_build_config: make_builddir
