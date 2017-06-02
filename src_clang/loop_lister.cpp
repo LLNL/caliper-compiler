@@ -42,9 +42,6 @@
 // David Poliakoff (poliakoff1@llnl.gov)
 //------------------------------------------------------------------------------
 
-#define Q(x) #x
-#define QUOTE(x) Q(x)
-
 #include <cstdio>
 #include <memory>
 #include <sstream>
@@ -77,49 +74,10 @@
 
 using namespace clang;
 
-class FixedDatabase : public clang::tooling::CompilationDatabase{
-  using CompileCommand = clang::tooling::CompileCommand;
-  public:
-  FixedDatabase(clang::tooling::CompilationDatabase* in, std::string add){
-    my_db = in;
-    my_addend = add;
-  }
-  virtual std::vector< CompileCommand >   getCompileCommands (StringRef FilePath) const override{
-    std::vector<CompileCommand> original = my_db->getCompileCommands(FilePath);
-    std::vector<CompileCommand> transformed;
-    for( CompileCommand x : original){
-       auto it = x.CommandLine.begin();
-       it++;
-       x.CommandLine.insert(it,my_addend);
-       transformed.push_back(x);
-       break;
-    }
-    return transformed;
-  }
-  virtual std::vector< std::string >   getAllFiles () const override{
-    return my_db->getAllFiles();
-  }
-  virtual std::vector< CompileCommand >   getAllCompileCommands () const override{
-    std::vector<CompileCommand> original = my_db->getAllCompileCommands();
-    std::vector<CompileCommand> transformed;
-    for( CompileCommand x : original){
-       auto it = x.CommandLine.begin();
-       it++;
-       x.CommandLine.insert(it,my_addend);
-       transformed.push_back(x);
-    }
-    return transformed;
-  }
-  clang::tooling::CompilationDatabase* my_db;
-  std::string my_addend;
-};
-
-CompilerInstance TheCompInst;
 Rewriter TheRewriter;
-std::regex m_regex;
-std::vector<std::regex> whitelisted_funcs;
-std::vector<std::regex> blacklisted_funcs;
 static bool rewrit = false;
+
+
 // By implementing RecursiveASTVisitor, we can specify which AST nodes
 // we're interested in by overriding relevant methods.
 class MyASTVisitor : public RecursiveASTVisitor<MyASTVisitor>
@@ -157,74 +115,17 @@ public:
     }
   }
 
-  bool VisitFunctionDecl(FunctionDecl *f)
+  bool VisitForStmt(ForStmt *f)
   {
-    // Only function definitions (with bodies), not declarations.
-    static FileID moddedFile;
-    bool hits = true;
-    std::string fname = f->getQualifiedNameAsString();
-    if (TheRewriter.getSourceMgr().getFileID(f->getLocStart()) != moddedFile) {
-      moddedFile = TheRewriter.getSourceMgr().getFileID(f->getLocStart());
-      SourceLocation fileStartLoc =
-          TheRewriter.getSourceMgr().translateLineCol(moddedFile, 1, 1);
-      TheRewriter.InsertTextBefore(fileStartLoc, "#include<caliper/cali.h>\n");
+    if(f){
+       llvm::outs() <<"\n  \"" << f->getLocStart().printToString(astContext->getSourceManager()) << "\" : {\n " 
+         << "    \"left\"  : "<<"\""<<f->getLParenLoc().printToString(astContext->getSourceManager()) << "\"\n" 
+         << "    \"right\" : "<<"\""<<f->getRParenLoc().printToString(astContext->getSourceManager())
+         <<"\n  }, ";
+
+    
     }
-    hits = true;
-    if (hits) {
-      if (f->hasBody()) {
-        rewrit = true;
-        Stmt *FuncBody = f->getBody();
 
-        modify_recursively<ReturnStmt>(FuncBody, [&](const ReturnStmt *ret) {
-          SourceLocation locStart = ret->getLocStart();
-          TheRewriter.InsertTextBefore(locStart,
-                                       " {cali_end(cali_function_attr_id);");
-          SourceLocation locEnd = ret->getLocEnd();
-          if (ret->getRetValue()) {
-            int tokLength =
-                Lexer::MeasureTokenLength(ret->getRetValue()->getLocEnd(),
-                                          TheRewriter.getSourceMgr(),
-                                          TheCompInst.getLangOpts());
-            locEnd =
-                ret->getRetValue()->getLocEnd().getLocWithOffset(tokLength + 1);
-            TheRewriter.InsertTextAfter(locEnd, "}\n");
-          } else {
-            // locEnd = locEnd.getLocWithOffset(8);
-            TheRewriter.InsertTextAfter(locEnd, "}\n");
-          }
-        });
-        auto firstStatementChildVec = FuncBody->children();
-        if (firstStatementChildVec.begin() != firstStatementChildVec.end()) {
-          auto firstStatement = firstStatementChildVec.begin();
-          TheRewriter.InsertTextBefore(
-              firstStatement->getSourceRange().getBegin(),
-              getCaliStartAnnotation(f->getNameAsString()));
-          TheRewriter.InsertTextBefore(f->getBodyRBrace(),
-                                       "cali_end(cali_function_attr_id);\n");
-        }
-        //// Type name as string
-        // QualType QT = f->getReturnType();
-        // std::string TypeStr = QT.getAsString();
-
-        //// Function name
-        // DeclarationName DeclName = f->getNameInfo().getName();
-        // std::string FuncName = DeclName.getAsString();
-
-        //// Add comment before
-        // std::stringstream SSBefore;
-        // SSBefore << "// Begin function " << FuncName << " returning " <<
-        // TypeStr
-        //         << "\n";
-        // SourceLocation ST = f->getSourceRange().getBegin();
-        // TheRewriter.InsertText(ST, SSBefore.str(), true, true);
-
-        //// And after
-        // std::stringstream SSAfter;
-        // SSAfter << "\n// End function " << FuncName;
-        // ST = FuncBody->getLocEnd().getLocWithOffset(1);
-        // TheRewriter.InsertText(ST, SSAfter.str(), true, true);
-      }
-    }
     return true;
   }
 
@@ -272,6 +173,7 @@ public:
 
 int main(int argc, const char *argv[])
 {
+  llvm::outs() << " {";
   if (argc < 2) {
     llvm::errs() << "Usage: rewritersample <filename> <regexes>\n";
     return 1;
@@ -279,16 +181,53 @@ int main(int argc, const char *argv[])
   llvm::cl::OptionCategory newCategory("Sample", "Sample");
 
   clang::tooling::CommonOptionsParser op(argc, argv, newCategory);
-  FixedDatabase my_db(&op.getCompilations(), QUOTE(CLANG_INCLUDE_CMD));
-  my_db.getAllCompileCommands();
-  clang::tooling::RefactoringTool Tool(my_db, op.getSourcePathList());
+  clang::tooling::RefactoringTool Tool(op.getCompilations(), op.getSourcePathList());
   if (int Result = Tool.run(clang::tooling::newFrontendActionFactory<ExampleFrontendAction>().get())) {
     return Result;
   }
-  const RewriteBuffer *RewriteBuf =
-      TheRewriter.getRewriteBufferFor(TheRewriter.getSourceMgr().getMainFileID());
-   if(true){
-    llvm::outs() << std::string(RewriteBuf->begin(), RewriteBuf->end());
-  }
+  llvm::outs() << "DOGSSENTINELDOGS\n}\n";
+  // whitelisted_funcs.emplace_back(std::regex(".*",std::regex::optimize));
+  // CompilerInstance will hold the instance of the Clang compiler for us,
+  // managing the various objects needed to run the compiler.
+  // TheCompInst.createDiagnostics();
+
+  // LangOptions &lo = TheCompInst.getLangOpts();
+  // lo.CPlusPlus = 1;
+
+  //// Initialize target info with the default triple for our platform.
+  // auto TO = std::make_shared<TargetOptions>();
+  // TO->Triple = llvm::sys::getDefaultTargetTriple();
+  // TargetInfo *TI =
+  //    TargetInfo::CreateTargetInfo(TheCompInst.getDiagnostics(), TO);
+  // TheCompInst.setTarget(TI);
+
+  // TheCompInst.createFileManager();
+  // FileManager &FileMgr = TheCompInst.getFileManager();
+  // TheCompInst.createSourceManager(FileMgr);
+  // SourceManager &SourceMgr = TheCompInst.getSourceManager();
+  // TheCompInst.createPreprocessor(TU_Module);
+  // TheCompInst.createASTContext();
+
+  //// A Rewriter helps us manage the code rewriting task.
+  // Rewriter TheRewriter;
+  // TheRewriter.setSourceMgr(SourceMgr, TheCompInst.getLangOpts());
+
+  //// Set the main file handled by the source manager to the input file.
+  // const FileEntry *FileIn = FileMgr.getFile(argv[1]);
+  // SourceMgr.setMainFileID(
+  //    SourceMgr.createFileID(FileIn, SourceLocation(), SrcMgr::C_User));
+  // TheCompInst.getDiagnosticClient().BeginSourceFile(
+  //    TheCompInst.getLangOpts(), &TheCompInst.getPreprocessor());
+
+  //// Create an AST consumer instance which is going to get called by
+  //// ParseAST.
+  // MyASTConsumer TheConsumer(TheRewriter);
+
+  //// Parse the file to AST, registering our consumer as the AST consumer.
+  // ParseAST(TheCompInst.getPreprocessor(), &TheConsumer,
+  //         TheCompInst.getASTContext());
+
+  //// At this point the rewriter's buffer should be full with the rewritten
+  //// file contents.
   // return 0;
 }

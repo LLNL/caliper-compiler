@@ -59,6 +59,9 @@
 CLANG_LOC_GUESS = $(shell which clang)
 LLVM_SRC_PATH := $(shell echo $(CLANG_LOC_GUESS) | rev | sed "s,.*/nib/,/," | rev)
 
+CLANG_LIB_INCLUDES=$(shell find $(LLVM_SRC_PATH) -maxdepth 6 -name stddef.h | tr -d '\n' | sed "s,stddef.h,," | sed "s,^.*v1/, -I,g" | sed "s,- I,-I,")
+
+$(info $(CLANG_LIB_INCLUDES))
 # LLVM_BUILD_PATH is the directory in which you built LLVM - where you ran
 # configure or cmake.
 # For linking vs. a binary build of LLVM, point to the main untarred directory.
@@ -82,7 +85,7 @@ $(info -----------------------------------------------)
 # not support (for example '-Wcovered-switch-default'). If you run into this
 # problem, build with CXX set to a modern clang++ binary instead of g++.
 CXX := clang++
-CXXFLAGS := -fno-rtti -O0 -g -std=c++1z -w
+CXXFLAGS := -fno-rtti -O0 -g -std=c++1z -w -DCLANG_INCLUDE_CMD=-I/usr/global/tools/clang/chaos_5_x86_64_ib/clang-cuda-beta-2017-05-30/lib/clang/5.0.0/include/
 PLUGIN_CXXFLAGS := -fpic
 
 LLVM_CXXFLAGS := `$(LLVM_BIN_PATH)/llvm-config --cxxflags` -std=c++1z -w -g
@@ -140,13 +143,13 @@ SRC_CLANG_DIR := src_clang
 BUILDDIR := build
 
 .PHONY: all
-default: cali testprog
+default: cali $(BUILDDIR)/testprog $(BUILDDIR)/loop_lister
 
 cali: make_builddir \
 	$(BUILDDIR)/caliper_instrumenter
 
-testprog: test.cpp
-	$(CXX) $(CXXFLAGS) test.cpp -o test_prog
+$(BUILDDIR)/testprog: test.cpp
+	$(CXX) $(CXXFLAGS) test.cpp -o $@
 
 .PHONY: emit_build_config
 emit_build_config: make_builddir
@@ -160,6 +163,9 @@ $(BUILDDIR)/caliper_instrumenter: $(SRC_CLANG_DIR)/caliper_instrumenter.cpp
 	$(CXX) $(CXXFLAGS) $(LLVM_CXXFLAGS) $(CLANG_INCLUDES) $^ \
 		$(CLANG_LIBS) $(LLVM_LDFLAGS) -o $@
 
+$(BUILDDIR)/loop_lister: $(SRC_CLANG_DIR)/loop_lister.cpp
+	$(CXX) $(CXXFLAGS) $(LLVM_CXXFLAGS) $(CLANG_INCLUDES) $^ \
+		$(CLANG_LIBS) $(LLVM_LDFLAGS) -o $@
 .PHONY: clean
 clean:
 	rm -rf $(BUILDDIR)/* *.dot test/*.pyc test/__pycache__
